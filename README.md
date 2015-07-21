@@ -9,7 +9,7 @@ Passport-SAML has been tested to work with Onelogin, Okta, Shibboleth, [SimpleSA
 
 ## Installation
 
-    $ npm install passport-saml
+    $ npm install passport-saml-restify
 
 ## Usage
 
@@ -20,7 +20,7 @@ This example utilizes the [Feide OpenIdp identity provider](https://openidp.feid
 The SAML identity provider will redirect you to the URL provided by the `path` configuration.
 
 ```javascript
-var SamlStrategy = require('passport-saml').Strategy;
+var SamlStrategy = require('passport-saml-restify').Strategy;
 [...]
 
 passport.use(new SamlStrategy(
