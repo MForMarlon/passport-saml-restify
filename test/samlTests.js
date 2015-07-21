@@ -1,6 +1,6 @@
 'use strict';
 
-var SAML = require('../lib/passport-saml/saml.js').SAML;
+var SAML = require('../lib/passport-saml-restify/saml.js').SAML;
 var should = require('should');
 var url = require('url');
 

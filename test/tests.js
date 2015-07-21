@@ -1,14 +1,13 @@
 'use strict';
-var express      = require( 'express' );
-var bodyParser   = require( 'body-parser' );
-var passport     = require( 'passport' );
-var SamlStrategy = require( '../lib/passport-saml/index.js' ).Strategy;
+var restify      = require( 'restify' );
+var passport     = require( 'passport-restify' );
+var SamlStrategy = require( '../lib/passport-saml-restify/index.js' ).Strategy;
 var request      = require( 'request' );
 var should       = require( 'should' );
 var zlib         = require( 'zlib' );
 var querystring  = require( 'querystring' );
 var parseString  = require( 'xml2js' ).parseString;
-var SAML         = require( '../lib/passport-saml/index.js' ).SAML;
+var SAML         = require( '../lib/passport-saml-restify/index.js' ).SAML;
 var fs           = require( 'fs' );
 var sinon        = require('sinon');
 
@@ -67,13 +66,14 @@ describe( 'passport-saml /', function() {
       }
     ];
 
-    var server;
+    var app;
 
     function testForCheck(check) {
       return function (done) {
         var pp = new passport.Authenticator();
-        var app = express();
-        app.use(bodyParser.urlencoded({extended: false}));
+        app = restify.createServer();
+        app.use(restify.queryParser());
+        app.use(restify.bodyParser());
         app.use(pp.initialize());
         var config = check.config;
         config.callbackUrl = 'http://localhost:3033/login';
@@ -94,16 +94,12 @@ describe( 'passport-saml /', function() {
 
         app.post('/login',
           pp.authenticate("saml"),
-          function (req, res) {
-            res.status(200).send("200 OK");
+          function (req, res, next) {
+            res.send(200, "200 OK");
+            next();
           });
 
-        app.use(function (err, req, res, next) {
-          // console.log( err.stack );
-          res.status(500).send('500 Internal Server Error');
-        });
-
-        server = app.listen(3033, function () {
+        app.listen(3033, function () {
           var requestOpts = {
             url: 'http://localhost:3033/login',
             method: 'POST',
@@ -127,8 +123,9 @@ describe( 'passport-saml /', function() {
     function testPassReqToCallback(check) {
       return function (done) {
         var pp = new passport.Authenticator();
-        var app = express();
-        app.use(bodyParser.urlencoded({extended: false}));
+        app = restify.createServer();
+        app.use(restify.queryParser());
+        app.use(restify.bodyParser());
         app.use(pp.initialize());
         var config = check.config;
         config.callbackUrl = 'http://localhost:3033/login';
@@ -145,14 +142,11 @@ describe( 'passport-saml /', function() {
         fakeClock = sinon.useFakeTimers(Date.parse(check.mockDate));
         app.post('/login',
           pp.authenticate("saml"),
-          function (req, res) {
-            res.status(200).send("200 OK");
+          function (req, res, next) {
+            res.send(200, "200 OK");
+            next();
           });
-        app.use(function (err, req, res, next) {
-          // console.log( err.stack );
-          res.status(500).send('500 Internal Server Error');
-        });
-        server = app.listen(3033, function () {
+        app.listen(3033, function () {
           var requestOpts = {
             url: 'http://localhost:3033/login',
             method: 'POST',
@@ -165,7 +159,7 @@ describe( 'passport-saml /', function() {
               should.exist(passedRequest);
               passedRequest.url.should.eql('/login');
               passedRequest.method.should.eql('POST');
-              passedRequest.body.should.eql(check.samlResponse);
+              passedRequest.params.should.eql(check.samlResponse);
             } else {
               should.not.exist(passedRequest);
             }
@@ -183,7 +177,7 @@ describe( 'passport-saml /', function() {
 
     afterEach(function (done) {
       fakeClock.restore();
-      server.close(done);
+      app.close(done);
     });
   });
 
@@ -193,26 +187,26 @@ describe( 'passport-saml /', function() {
       { name: "Empty Config",
         config: {},
         result: {
-          'samlp:AuthnRequest': 
-           { '$': 
+          'samlp:AuthnRequest':
+           { '$':
               { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                 Version: '2.0',
                 ProtocolBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
                 AssertionConsumerServiceURL: 'http://localhost:3033/login',
                 Destination: 'https://wwwexampleIdp.com/saml'},
-             'saml:Issuer': 
+             'saml:Issuer':
               [ { _: 'onelogin_saml',
                   '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
-             'samlp:NameIDPolicy': 
-              [ { '$': 
+             'samlp:NameIDPolicy':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Format: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress',
                      AllowCreate: 'true' } } ],
-             'samlp:RequestedAuthnContext': 
-              [ { '$': 
+             'samlp:RequestedAuthnContext':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Comparison: 'exact' },
-                  'saml:AuthnContextClassRef': 
+                  'saml:AuthnContextClassRef':
                    [ { _: 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
                        '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ] } ] } }
       },
@@ -224,9 +218,9 @@ describe( 'passport-saml /', function() {
           attributeConsumingServiceIndex: 123,
           forceAuthn: false
         },
-        result: { 
-          'samlp:AuthnRequest': 
-           { '$': 
+        result: {
+          'samlp:AuthnRequest':
+           { '$':
               { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                 Version: '2.0',
                 ProtocolBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
@@ -234,19 +228,19 @@ describe( 'passport-saml /', function() {
                 AttributeConsumingServiceIndex: '123',
                 Destination: 'https://wwwexampleIdp.com/saml',
                 IsPassive: 'true'},
-             'saml:Issuer': 
+             'saml:Issuer':
               [ { _: 'http://exampleSp.com/saml',
                   '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
-             'samlp:NameIDPolicy': 
-              [ { '$': 
+             'samlp:NameIDPolicy':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Format: 'alternateIdentifier',
                      AllowCreate: 'true' } } ],
-             'samlp:RequestedAuthnContext': 
-              [ { '$': 
+             'samlp:RequestedAuthnContext':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Comparison: 'exact' },
-                  'saml:AuthnContextClassRef': 
+                  'saml:AuthnContextClassRef':
                    [ { _: 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
                        '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ] } ] } }
       },
@@ -258,9 +252,9 @@ describe( 'passport-saml /', function() {
           attributeConsumingServiceIndex: 123,
           skipRequestCompression: true
         },
-        result: { 
-          'samlp:AuthnRequest': 
-           { '$': 
+        result: {
+          'samlp:AuthnRequest':
+           { '$':
               { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                 Version: '2.0',
                 ProtocolBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
@@ -268,19 +262,19 @@ describe( 'passport-saml /', function() {
                 AttributeConsumingServiceIndex: '123',
                 Destination: 'https://wwwexampleIdp.com/saml',
                 IsPassive: 'true' },
-             'saml:Issuer': 
+             'saml:Issuer':
               [ { _: 'http://exampleSp.com/saml',
                   '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
-             'samlp:NameIDPolicy': 
-              [ { '$': 
+             'samlp:NameIDPolicy':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Format: 'alternateIdentifier',
                      AllowCreate: 'true' } } ],
-             'samlp:RequestedAuthnContext': 
-              [ { '$': 
+             'samlp:RequestedAuthnContext':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Comparison: 'exact' },
-                  'saml:AuthnContextClassRef': 
+                  'saml:AuthnContextClassRef':
                    [ { _: 'urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport',
                        '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ] } ] } }
       },
@@ -294,9 +288,9 @@ describe( 'passport-saml /', function() {
           disableRequestedAuthnContext: true,
           forceAuthn: true
         },
-        result: { 
-          'samlp:AuthnRequest': 
-           { '$': 
+        result: {
+          'samlp:AuthnRequest':
+           { '$':
               { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                 Version: '2.0',
                 ProtocolBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
@@ -305,11 +299,11 @@ describe( 'passport-saml /', function() {
                 Destination: 'https://wwwexampleIdp.com/saml',
                 IsPassive: 'true',
                 ForceAuthn: 'true' },
-             'saml:Issuer': 
+             'saml:Issuer':
               [ { _: 'http://exampleSp.com/saml',
                   '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
-             'samlp:NameIDPolicy': 
-              [ { '$': 
+             'samlp:NameIDPolicy':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Format: 'alternateIdentifier',
                      AllowCreate: 'true' } } ] } }
@@ -322,9 +316,9 @@ describe( 'passport-saml /', function() {
           attributeConsumingServiceIndex: 123,
           authnContext: 'myAuthnContext'
         },
-        result: { 
-          'samlp:AuthnRequest': 
-           { '$': 
+        result: {
+          'samlp:AuthnRequest':
+           { '$':
               { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                 Version: '2.0',
                 ProtocolBinding: 'urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST',
@@ -332,30 +326,31 @@ describe( 'passport-saml /', function() {
                 AttributeConsumingServiceIndex: '123',
                 Destination: 'https://wwwexampleIdp.com/saml',
                 IsPassive: 'true'},
-             'saml:Issuer': 
+             'saml:Issuer':
               [ { _: 'http://exampleSp.com/saml',
                   '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
-             'samlp:NameIDPolicy': 
-              [ { '$': 
+             'samlp:NameIDPolicy':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Format: 'alternateIdentifier',
                      AllowCreate: 'true' } } ],
-             'samlp:RequestedAuthnContext': 
-              [ { '$': 
+             'samlp:RequestedAuthnContext':
+              [ { '$':
                    { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
                      Comparison: 'exact' },
-                  'saml:AuthnContextClassRef': 
+                  'saml:AuthnContextClassRef':
                    [ { _: 'myAuthnContext',
                        '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ] } ] } }
       }
     ];
 
-    var server;
+    var app;
 
     function testForCheck( check ) {
       return function( done ) {
-        var app = express();
-        app.use( bodyParser.urlencoded({extended: false}) );
+        app = restify.createServer();
+        app.use(restify.queryParser());
+        app.use(restify.bodyParser());
         app.use( passport.initialize() );
         var config = check.config;
         config.callbackUrl = 'http://localhost:3033/login';
@@ -367,18 +362,13 @@ describe( 'passport-saml /', function() {
           })
         );
 
-        app.get( '/login', 
+        app.get( '/login',
           passport.authenticate( "saml", { samlFallback: 'login-request', session: false } ),
           function(req, res) {
             res.status(200).send("200 OK");
           });
 
-        app.use( function( err, req, res, next ) {
-          console.log( err.stack );
-          res.status(500).send('500 Internal Server Error');
-        });
-
-        server = app.listen( 3033, function() {
+        app.listen( 3033, function() {
           var requestOpts = {
             url: 'http://localhost:3033/login',
             method: 'get',
@@ -400,8 +390,8 @@ describe( 'passport-saml /', function() {
               should.not.exist( err );
               parseString( samlRequest.toString(), function( err, doc ) {
                 should.not.exist( err );
-                delete doc['samlp:AuthnRequest']['$']["ID"];
-                delete doc['samlp:AuthnRequest']['$']["IssueInstant"];
+                delete doc['samlp:AuthnRequest'].$.ID;
+                delete doc['samlp:AuthnRequest'].$.IssueInstant;
                 doc.should.eql( check.result );
                 done();
               });
@@ -417,22 +407,22 @@ describe( 'passport-saml /', function() {
     }
 
     afterEach( function( done ) {
-      server.close( done );
+      app.close( done );
     });
   });
 
   describe( 'saml.js / ', function() {
     it( 'generateLogoutRequest', function( done ) {
-      var expectedRequest = { 
-        'samlp:LogoutRequest': 
-         { '$': 
+      var expectedRequest = {
+        'samlp:LogoutRequest':
+         { '$':
             { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
               'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
               //ID: '_85ba0a112df1ffb57805',
               Version: '2.0',
               //IssueInstant: '2014-05-29T03:32:23Z',
               Destination: 'foo' },
-           'saml:Issuer': 
+           'saml:Issuer':
             [ { _: 'onelogin_saml',
                 '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
            'saml:NameID': [ { _: 'bar', '$': { Format: 'foo' } } ] } };
@@ -453,9 +443,9 @@ describe( 'passport-saml /', function() {
     });
 
     it( 'generateLogoutResponse', function( done ) {
-      var expectedResponse =  { 
-        'samlp:LogoutResponse': 
-         { '$': 
+      var expectedResponse =  {
+        'samlp:LogoutResponse':
+         { '$':
             { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
               'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
               //ID: '_d11b3c5e085b2417f4aa',
@@ -477,21 +467,21 @@ describe( 'passport-saml /', function() {
     });
 
     it( 'generateLogoutRequest', function( done ) {
-      var expectedRequest = { 
-        'samlp:LogoutRequest': 
-         { '$': 
+      var expectedRequest = {
+        'samlp:LogoutRequest':
+         { '$':
             { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
               'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
               //ID: '_85ba0a112df1ffb57805',
               Version: '2.0',
               //IssueInstant: '2014-05-29T03:32:23Z',
               Destination: 'foo' },
-           'saml:Issuer': 
+           'saml:Issuer':
             [ { _: 'onelogin_saml',
                 '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
            'saml:NameID': [ { _: 'bar', '$': { Format: 'foo' } } ],
-           'saml2p:SessionIndex': 
-           [ { _: 'session-id', 
+           'saml2p:SessionIndex':
+           [ { _: 'session-id',
                '$': { 'xmlns:saml2p': 'urn:oasis:names:tc:SAML:2.0:protocol' } } ] } };
 
       var samlObj = new SAML( { entryPoint: "foo" } );
@@ -708,7 +698,7 @@ describe( 'passport-saml /', function() {
         var samlObj = new SAML( samlConfig );
 
         ['logout', 'authorize'].forEach( function( operation ) {
-          var additionalParams = samlObj.getAdditionalParams({body:{RelayState: "test"}}, operation);
+          var additionalParams = samlObj.getAdditionalParams({params:{RelayState: "test"}}, operation);
 
           Object.keys(additionalParams).should.have.length(1);
           additionalParams.should.containEql({'RelayState': 'test'});
