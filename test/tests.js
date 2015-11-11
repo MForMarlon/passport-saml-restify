@@ -442,6 +442,40 @@ describe( 'passport-saml /', function() {
       });
     });
 
+    it( 'generateLogoutRequest adds the NameQualifier and SPNameQualifier to the saml request', function( done ) {
+      var expectedRequest = { 
+        'samlp:LogoutRequest': 
+         { '$': 
+            { 'xmlns:samlp': 'urn:oasis:names:tc:SAML:2.0:protocol',
+              'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion',
+              //ID: '_85ba0a112df1ffb57805',
+              Version: '2.0',
+              //IssueInstant: '2014-05-29T03:32:23Z',
+              Destination: 'foo' },
+           'saml:Issuer': 
+            [ { _: 'onelogin_saml',
+                '$': { 'xmlns:saml': 'urn:oasis:names:tc:SAML:2.0:assertion' } } ],
+           'saml:NameID': [ { _: 'bar', '$': { Format: 'foo',
+                                               SPNameQualifier: 'Service Provider',
+                                               NameQualifier: 'Identity Provider' } } ] } };
+
+      var samlObj = new SAML( { entryPoint: "foo" } );
+      var logoutRequest = samlObj.generateLogoutRequest({
+        user: {
+          nameIDFormat: 'foo',
+          nameID: 'bar',
+          nameQualifier: 'Identity Provider',
+          spNameQualifier: 'Service Provider'
+        }
+      });
+      parseString( logoutRequest, function( err, doc ) {
+        delete doc['samlp:LogoutRequest']['$']["ID"];
+        delete doc['samlp:LogoutRequest']['$']["IssueInstant"];
+        doc.should.eql( expectedRequest );
+        done();
+      });
+    });
+
     it( 'generateLogoutResponse', function( done ) {
       var expectedResponse =  {
         'samlp:LogoutResponse':
@@ -500,25 +534,89 @@ describe( 'passport-saml /', function() {
       });
     });
 
-    it( 'generateServiceProviderMetadata', function( done ) {
+    describe( 'generateServiceProviderMetadata tests /', function() {
+      function testMetadata( samlConfig, expectedMetadata ) {
+        var samlObj = new SAML( samlConfig );
+        var decryptionCert = fs.readFileSync(__dirname + '/static/testshib encryption cert.pem', 'utf-8');
+        var metadata = samlObj.generateServiceProviderMetadata( decryptionCert );
+        // splits are to get a nice diff if they don't match for some reason
+        metadata.split( '\n' ).should.eql( expectedMetadata.split( '\n' ) );
+
+        // verify that we are exposed through Strategy as well
+        var strategy = new SamlStrategy( samlConfig, function() {} );
+        metadata = strategy.generateServiceProviderMetadata( decryptionCert );
+        metadata.split( '\n' ).should.eql( expectedMetadata.split( '\n' ) );
+      }
+
+      it( 'config with callbackUrl and decryptionPvk should pass', function( done ) {
+        var samlConfig = {
+          issuer: 'http://example.serviceprovider.com',
+          callbackUrl: 'http://example.serviceprovider.com/saml/callback',
+          identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+          decryptionPvk: fs.readFileSync(__dirname + '/static/testshib encryption pvk.pem')
+        };
+        var expectedMetadata = fs.readFileSync(__dirname + '/static/expected metadata.xml', 'utf-8');
+
+        testMetadata( samlConfig, expectedMetadata );
+        done();
+      });
+
+      it( 'config with callbackUrl should pass', function( done ) {
+        var samlConfig = {
+          issuer: 'http://example.serviceprovider.com',
+          callbackUrl: 'http://example.serviceprovider.com/saml/callback',
+          identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient'
+        };
+        var expectedMetadata = fs.readFileSync(__dirname + '/static/expected metadata without key.xml', 'utf-8');
+
+        testMetadata( samlConfig, expectedMetadata );
+        done();
+      });
+
+      it( 'config with protocol, path, host, and decryptionPvk should pass', function( done ) {
+        var samlConfig = {
+          issuer: 'http://example.serviceprovider.com',
+          protocol: 'http://',
+          host: 'example.serviceprovider.com',
+          path: '/saml/callback',
+          identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+          decryptionPvk: fs.readFileSync(__dirname + '/static/testshib encryption pvk.pem')
+        };
+        var expectedMetadata = fs.readFileSync(__dirname + '/static/expected metadata.xml', 'utf-8');
+
+        testMetadata( samlConfig, expectedMetadata );
+        done();
+      });
+
+      it( 'config with protocol, path, and host should pass', function( done ) {
+        var samlConfig = {
+          issuer: 'http://example.serviceprovider.com',
+          protocol: 'http://',
+          host: 'example.serviceprovider.com',
+          path: '/saml/callback',
+          identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient'
+        };
+        var expectedMetadata = fs.readFileSync(__dirname + '/static/expected metadata without key.xml', 'utf-8');
+
+        testMetadata( samlConfig, expectedMetadata );
+        done();
+      });
+  });
+
+    it('generateServiceProviderMetadata contains logout callback url', function (done) {
       var samlConfig = {
         issuer: 'http://example.serviceprovider.com',
         callbackUrl: 'http://example.serviceprovider.com/saml/callback',
         identifierFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
-        decryptionPvk: fs.readFileSync(__dirname + '/static/testshib encryption pvk.pem')
+        decryptionPvk: fs.readFileSync(__dirname + '/static/testshib encryption pvk.pem'),
+        logoutCallbackUrl: 'http://example.serviceprovider.com/logout'
       };
 
-      var samlObj = new SAML( samlConfig );
+      var samlObj = new SAML(samlConfig);
       var decryptionCert = fs.readFileSync(__dirname + '/static/testshib encryption cert.pem', 'utf-8');
-      var metadata = samlObj.generateServiceProviderMetadata( decryptionCert );
-      var expectedMetadata = fs.readFileSync(__dirname + '/static/expected metadata.xml', 'utf-8');
-      // splits are to get a nice diff if they don't match for some reason
-      metadata.split( '\n' ).should.eql( expectedMetadata.split( '\n' ) );
-
-      // verify that we are exposed through Strategy as well
-      var strategy = new SamlStrategy( samlConfig, function() {} );
-      metadata = strategy.generateServiceProviderMetadata( decryptionCert );
-      metadata.split( '\n' ).should.eql( expectedMetadata.split( '\n' ) );
+      var metadata = samlObj.generateServiceProviderMetadata(decryptionCert);
+      metadata.should.containEql('SingleLogoutService');
+      metadata.should.containEql(samlConfig.logoutCallbackUrl);
       done();
     });
 
@@ -566,6 +664,93 @@ describe( 'passport-saml /', function() {
         err.message.should.match( /InvalidNameIDPolicy/ );
         should.exist( err.statusXml );
         done();
+      });
+    });
+
+    describe( 'my test',function() {
+      var fakeClock;
+      before(function(){
+          fakeClock = sinon.useFakeTimers(Date.parse('2015-08-31T08:55:00+00:00'));
+      });
+      after(function(){
+          fakeClock.restore();
+      });
+
+      it('accept response with an attributeStatement element without attributeValue', function(done) {
+          var container = { 
+              SAMLResponse : fs.readFileSync(
+                  __dirname + '/static/response-with-uncomplete-attribute.xml'
+              ).toString('base64')
+          };
+          var samlObj = new SAML();
+
+          samlObj.validatePostResponse(container, function(err, profile) {
+            should.not.exist(err);
+            profile.issuer.should.eql("https://evil-corp.com");
+            profile.nameID.should.eql("vincent.vega@evil-corp.com");
+            should(profile).have.property("evil-corp.egroupid").eql("vincent.vega@evil-corp.com");
+            // attributes without attributeValue child should be ignored
+            should(profile).not.have.property("evilcorp.roles");
+            done();
+          });
+      });
+    });
+
+    describe( 'request signature checks /', function() {
+      var fakeClock;
+      beforeEach(function(){
+          fakeClock = sinon.useFakeTimers(Date.parse('2014-05-28T00:13:09Z'));
+      });
+      afterEach(function(){
+          fakeClock.restore();
+      });
+
+      it( 'acme_tools request signed with sha256', function( done ) {
+        var samlConfig = {
+          entryPoint: 'https://adfs.acme_tools.com/adfs/ls/',
+          issuer: 'acme_tools_com',
+          callbackUrl: 'https://relyingparty/adfs/postResponse',
+          privateCert: fs.readFileSync(__dirname + '/static/acme_tools_com.key', 'utf-8'),
+          authnContext: 'http://schemas.microsoft.com/ws/2008/06/identity/authenticationmethod/password',
+          identifierFormat: null,
+          signatureAlgorithm: 'sha256',
+          additionalParams: {
+            customQueryStringParam: 'CustomQueryStringParamValue'
+          }
+        };
+        var samlObj = new SAML( samlConfig );
+        samlObj.generateUniqueID = function () { return '12345678901234567890' };
+        samlObj.getAuthorizeUrl({}, function(err, url) {
+          var qry = require('querystring').parse(require('url').parse(url).query);
+          qry.SigAlg.should.match('http://www.w3.org/2001/04/xmldsig-more#rsa-sha256');
+          qry.Signature.should.match('SL85w0h6Pt7ejplGrR4OOTh4Zo9zs/MQHZep27kSzs4+U/0QdQi7hg5T0TKqCSRBZpVtspMpw+i6F0tZrFot0dIJgeCgkvMA2Tllwt6K0DbKWOiNXW5S2M9tUZktdJVfjr2D5e0SG4jQIwa4PVONgNQEKFxydIqwxVh9NGYeDeMUGq5/4QpMDLgYOvLfShyvhlzmqeUs7LBlZbKJLCeXZi/Z5bnF+QOAugtKuh0G6kFOS0CmKVLIW/4XicLHmggUBDlt0VJaskxUx2amHSNUoYe3Z9/9TeZqc7IswNUOEiq/oy0DLhokLnBEj+dBRMlgkAHp/gaWcc1Vp/1jSlVAvg==');
+          qry.customQueryStringParam.should.match('CustomQueryStringParamValue');
+          done();
+        });
+      });
+
+      it( 'acme_tools request signed with sha1', function( done ) {
+        var samlConfig = {
+          entryPoint: 'https://adfs.acme_tools.com/adfs/ls/',
+          issuer: 'acme_tools_com',
+          callbackUrl: 'https://relyingparty/adfs/postResponse',
+          privateCert: fs.readFileSync(__dirname + '/static/acme_tools_com.key', 'utf-8'),
+          authnContext: 'http://schemas.microsoft.com/ws/2008/06/identity/authenticationmethod/password',
+          identifierFormat: null,
+          signatureAlgorithm: 'sha1',
+          additionalParams: {
+            customQueryStringParam: 'CustomQueryStringParamValue'
+          }
+        };
+        var samlObj = new SAML( samlConfig );
+        samlObj.generateUniqueID = function () { return '12345678901234567890' };
+        samlObj.getAuthorizeUrl({}, function(err, url) {
+          var qry = require('querystring').parse(require('url').parse(url).query);
+          qry.SigAlg.should.match('http://www.w3.org/2000/09/xmldsig#rsa-sha1');
+          qry.Signature.should.match('VnYOXVDiIaio+Vt8D2XXVwdyvwhDcdvgrQSkeq85G+MfU31yK9fvYEPFARK5pF1uJakMsYrKzVBv7HLCFcYuztpuIZloMFvFkado0MxFK4A/QFZn+EYDJE8ddLSvrW3iyuoxyVBSnH0+KLzDiI81B28YZNU3NFJIKCKzQSGIllJ7Vgw6KjH/BmE5DY0eSeUCEe6OygHgazjSrNIWQQjww5nSGIqAQl94OVanZtQBrYIUtik+d1lAhnginG0UnPccstenxEMAun2uMGp9hVqroWQvWRbX/xspRpjPOrIkvv63FzEgmRObXVNqpzDICJRUSlhTLdXAm2hb+ScYocO6EQ==');
+          qry.customQueryStringParam.should.match('CustomQueryStringParamValue');
+          done();
+        });
       });
     });
 
@@ -909,6 +1094,40 @@ describe( 'passport-saml /', function() {
         });
       });
 
+      it( 'xml document with multiple AttributeStatements should have all attributes present on profile', function(done){
+        var requestId = '_dfab47d5d46374cd4b71';
+        var xml = '<samlp:Response ID="_f6c28a7d-9c82-4ae8-ba14-fc42c85081d3" InResponseTo="_dfab47d5d46374cd4b71" Version="2.0" IssueInstant="2014-06-05T12:07:07.662Z" xmlns:samlp="urn:oasis:names:tc:SAML:2.0:protocol"><saml:Issuer xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion">Verizon IDP Hub</saml:Issuer><samlp:Status><samlp:StatusCode Value="urn:oasis:names:tc:SAML:2.0:status:Success"/></samlp:Status><saml:Assertion Version="2.0" ID="_ea67f283-0afb-465a-ba78-5abe7b7f8584" IssueInstant="2014-06-05T12:07:07.663Z" xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion"><saml:Issuer>Verizon IDP Hub</saml:Issuer><saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified">UIS/jochen-work</saml:NameID><saml:SubjectConfirmation><saml:SubjectConfirmationData NotBefore="2014-06-05T12:06:07.664Z" NotOnOrAfter="2014-06-05T12:10:07.664Z" InResponseTo="_dfab47d5d46374cd4b71"/></saml:SubjectConfirmation></saml:Subject><saml:AttributeStatement><saml:Attribute Name="vz::identity" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">UIS/jochen-work</saml:AttributeValue></saml:Attribute></saml:AttributeStatement><saml:AttributeStatement><saml:Attribute Name="vz::subjecttype" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">UIS user</saml:AttributeValue></saml:Attribute></saml:AttributeStatement><saml:AttributeStatement><saml:Attribute Name="vz::account" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">e9aba0c4-ece8-4b44-9526-d24418aa95dc</saml:AttributeValue></saml:Attribute></saml:AttributeStatement><saml:AttributeStatement><saml:Attribute Name="vz::org" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">testorg</saml:AttributeValue></saml:Attribute></saml:AttributeStatement><saml:AttributeStatement><saml:Attribute Name="vz::name" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">Test User</saml:AttributeValue></saml:Attribute></saml:AttributeStatement><saml:AttributeStatement><saml:Attribute Name="net::ip" NameFormat="urn:oasis:names:tc:SAML:2.0:attrname-format:basic"><saml:AttributeValue xsi:type="urn:oasis:names:tc:SAML:2.0:attrname-format:unspecified" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">::1</saml:AttributeValue></saml:Attribute></saml:AttributeStatement></saml:Assertion><Signature xmlns="http://www.w3.org/2000/09/xmldsig#"><SignedInfo><CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/><SignatureMethod Algorithm="http://www.w3.org/2000/09/xmldsig#rsa-sha1"/><Reference URI="#_f6c28a7d-9c82-4ae8-ba14-fc42c85081d3"><Transforms><Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/><Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/></Transforms><DigestMethod Algorithm="http://www.w3.org/2000/09/xmldsig#sha1"/><DigestValue>qD+sVCaEdy1dTJoUQdo6o+tYsuU=</DigestValue></Reference></SignedInfo><SignatureValue>aLl+1yT7zdT4WnRXKh9cx7WWZnUi/NoxMJWhXP5d+Zu9A4/fjKApSywimU0MTTQxYpvZLjOZPsSwmvc1boJOlXveDsL7A3YWi/f7/zqlVWOfXLE8TVLqUE4jtLsJHFWIJXmh8CI0loqQNf6QcYi9BwCK82FhhXC+qWA5WCZIIWUUMxjxnPbunQ7mninEeW568wqyhb9pLV8QkThzZrZINCqxNvWyGuK/XGPx7ciD6ywbBkdOjlDbwRMaKQ9YeCzZGGzJwOe/NuCXj+oUyzfmzUCobIIR0HYLc4B5UplL7XIKQzpOA2lDDsLe6ZzdTv1qjxSm+dlVfo24onmiPlQUgA==</SignatureValue></Signature></samlp:Response>';
+        var base64xml = new Buffer( xml ).toString('base64');
+        var container = { SAMLResponse: base64xml };
+
+        var samlConfig = {
+          entryPoint: 'https://app.onelogin.com/trust/saml2/http-post/sso/371755',
+          cert: 'MIIDtTCCAp2gAwIBAgIJAKg4VeVcIDz1MA0GCSqGSIb3DQEBBQUAMEUxCzAJBgNVBAYTAlVTMRMwEQYDVQQIEwpTb21lLVN0YXRlMSEwHwYDVQQKExhJbnRlcm5ldCBXaWRnaXRzIFB0eSBMdGQwHhcNMTUwODEzMDE1NDIwWhcNMTUwOTEyMDE1NDIwWjBFMQswCQYDVQQGEwJVUzETMBEGA1UECBMKU29tZS1TdGF0ZTEhMB8GA1UEChMYSW50ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAxG3ouM7U+fXbJt69X1H6d4UNg/uRr06pFuU9RkfIwNC+yaXyptqB3ynXKsL7BFt4DCd0fflRvJAx3feJIDp16wN9GDVHcufWMYPhh2j5HcTW/j9JoIJzGhJyvO00YKBt+hHy83iN1SdChKv5y0iSyiPP5GnqFw+ayyHoM6hSO0PqBou1Xb0ZSIE+DHosBnvVna5w2AiPY4xrJl9yZHZ4Q7DfMiYTgstjETio4bX+6oLiBnYktn7DjdEslqhffVme4PuBxNojI+uCeg/sn4QVLd/iogMJfDWNuLD8326Mi/FE9cCRvFlvAiMSaebMI3zPaySsxTK7Zgj5TpEbmbHI9wIDAQABo4GnMIGkMB0GA1UdDgQWBBSVGgvoW4MhMuzBGce29PY8vSzHFzB1BgNVHSMEbjBsgBSVGgvoW4MhMuzBGce29PY8vSzHF6FJpEcwRTELMAkGA1UEBhMCVVMxEzARBgNVBAgTClNvbWUtU3RhdGUxITAfBgNVBAoTGEludGVybmV0IFdpZGdpdHMgUHR5IEx0ZIIJAKg4VeVcIDz1MAwGA1UdEwQFMAMBAf8wDQYJKoZIhvcNAQEFBQADggEBAJu1rqs+anD74dbdwgd3CnqnQsQDJiEXmBhG2leaGt3ve9b/9gKaJg2pyb2NyppDe1uLqh6nNXDuzg1oNZrPz5pJL/eCXPl7FhxhMUi04TtLf8LeNTCIWYZiFuO4pmhohHcv8kRvYR1+6SkLTC8j/TZerm7qvesSiTQFNapa1eNdVQ8nFwVkEtWl+JzKEM1BlRcn42sjJkijeFp7DpI7pU+PnYeiaXpRv5pJo8ogM1iFxN+SnfEs0EuQ7fhKIG9aHKi7bKZ7L6SyX7MDIGLeulEU6lf5D9BfXNmcMambiS0pXhL2QXajt96UBq8FT2KNXY8XNtR4y6MyyCzhaiZZcc8=',
+          validateInResponseTo: true
+        };
+        var samlObj = new SAML( samlConfig );
+
+        fakeClock = sinon.useFakeTimers(Date.parse('2014-06-05T12:07:07.662Z'));
+
+        // Mock the SAML request being passed through Passport-SAML
+        samlObj.cacheProvider.save(requestId, new Date().toISOString(), function(){});
+
+        samlObj.validatePostResponse( container, function( err, profile, logout ) {
+          should.not.exist( err );
+          profile.nameID.should.startWith( 'UIS/jochen-work' );
+          profile['vz::identity'].should.equal( 'UIS/jochen-work' );
+          profile['vz::subjecttype'].should.equal( 'UIS user' );
+          profile['vz::account'].should.equal( 'e9aba0c4-ece8-4b44-9526-d24418aa95dc' );
+          profile['vz::org'].should.equal( 'testorg' );
+          profile['vz::name'].should.equal( 'Test User' );
+          profile['net::ip'].should.equal( '::1' );
+          samlObj.cacheProvider.get(requestId, function(err, value){
+              should.not.exist(value);
+              done();
+          });
+        });
+      });
+
       describe( 'InResponseTo server cache expiration tests /', function() {
         it( 'should expire a cached request id after the time', function(done){
           var requestId = '_dfab47d5d46374cd4b71';
@@ -1097,6 +1316,65 @@ describe( 'passport-saml /', function() {
           profile.nameID.should.startWith( 'ploer' );
           done();
         });
+      });
+    });
+  });
+  describe('validatePostRequest()', function() {
+    var samlObj;
+    beforeEach(function() {
+      samlObj = new SAML({
+        cert: fs.readFileSync(__dirname + '/static/cert.pem', 'ascii')
+      });
+    });
+
+    it('errors if bad xml', function(done) {
+      var body = {
+        SAMLRequest: "asdf"
+      };
+      samlObj.validatePostRequest(body, function(err) {
+        should.exist(err);
+        done();
+      });
+    });
+    it('errors if bad signature', function(done) {
+      var body = {
+        SAMLRequest: fs.readFileSync(__dirname + '/static/logout_request_with_bad_signature.xml', 'base64')
+      };
+      samlObj.validatePostRequest(body, function(err) {
+        should.exist(err);
+        err.should.eql(new Error('Invalid signature'));
+        done();
+      });
+    });
+    it('returns profile for valid signature', function(done) {
+      var body = {
+        SAMLRequest: fs.readFileSync(__dirname + '/static/logout_request_with_good_signature.xml', 'base64')
+      };
+      samlObj.validatePostRequest(body, function(err, profile) {
+        should.not.exist(err);
+        profile.should.eql({
+          ID: 'pfxd4d369e8-9ea1-780c-aff8-a1d11a9862a1',
+          issuer: 'http://sp.example.com/demo1/metadata.php',
+          nameID: 'ONELOGIN_f92cc1834efc0f73e9c09f482fce80037a6251e7',
+          nameIDFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient'
+        });
+        done();
+      });
+    });
+    it('returns profile for valid signature including session index', function(done) {
+      var body = {
+        SAMLRequest: fs.readFileSync(__dirname + '/static/logout_request_with_session_index.xml', 'base64')
+      };
+      samlObj.validatePostRequest(body, function(err, profile) {
+        should.not.exist(err);
+        profile.should.eql({
+          ID: 'pfxd4d369e8-9ea1-780c-aff8-a1d11a9862a1',
+          issuer: 'http://sp.example.com/demo1/metadata.php',
+          nameID: 'ONELOGIN_f92cc1834efc0f73e9c09f482fce80037a6251e7',
+          nameIDFormat: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient',
+          sessionIndex: '1'
+        });
+        done();
       });
     });
   });

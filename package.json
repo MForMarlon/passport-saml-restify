@@ -36,7 +36,7 @@
     "passport-restify": "1.0.0",
     "q": "1.1.x",
     "xml2js": "0.4.x",
-    "xml-crypto": "0.3.x",
+    "xml-crypto": "0.8.x",
     "xmldom": "0.1.x",
     "xmlbuilder": "2.5.x",
     "xml-encryption": "~0.7"
@@ -49,7 +49,8 @@
     "request": "*",
     "restify": "4.0.3",
     "should": "*",
-    "sinon": "^1.10.2"
+    "sinon": "^1.10.2",
+    "passport": "0.3.x"
   },
   "engines": {
     "node": ">= 0.10.0"

@@ -45,11 +45,13 @@ Config parameter details:
  * `callbackUrl`: full callbackUrl (overrides path/protocol if supplied)
  * `path`: path to callback; will be combined with protocol and server host information to construct callback url if `callbackUrl` is not specified (default: `/saml/consume`)
  * `protocol`: protocol for callback; will be combined with path and server host information to construct callback url if `callbackUrl` is not specified (default: `http://`)
+ * `host`: host for callback; will be combined with path and protocol to construct callback url if `callbackUrl` is not specified (default: `localhost`)
  * `entryPoint`: identity provider entrypoint
  * `issuer`: issuer string to supply to identity provider
  * `cert`: see 'security and signatures'
  * `privateCert`: see 'security and signatures'
  * `decryptionPvk`: optional private key that will be used to attempt to decrypt any encrypted assertions that are received
+ * `signatureAlgorithm`: optionally set the signature algorithm for signing requests, valid values are 'sha1' (default) or 'sha256'
 * Additional SAML behaviors
  * `additionalParams`: dictionary of additional query params to add to all requests
  * `additionalAuthorizeParams`: dictionary of additional query params to add to 'authorize' requests
@@ -59,6 +61,7 @@ Config parameter details:
  * `disableRequestedAuthnContext`: if truthy, do not request a specific auth context
  * `authnContext`: if truthy, name identifier format to request auth context (default: `urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport`)
  * `forceAuthn`: if set to true, the initial SAML request from the service provider specifies that the IdP should force re-authentication of the user, even if they possess a valid session.
+ * `skipRequestCompression`: if set to true, the SAML request from the service provider won't be compressed.
 * InResponseTo Validation
  * `validateInResponseTo`: if truthy, then InResponseTo will be validated from incoming SAML responses
  * `requestIdExpirationPeriodMs`: Defines the expiration time when a Request ID generated for a SAML request will not be valid if seen in a SAML response in the `InResponseTo` field.  Default is 8 hours.
@@ -68,6 +71,7 @@ Config parameter details:
 * Logout
  * `logoutUrl`: base address to call with logout requests (default: `entryPoint`)
  * `additionalLogoutParams`: dictionary of additional query params to add to 'logout' requests
+ * `logoutCallbackUrl`: The value with which to populate the `Location` attribute in the `SingleLogoutService` elements in the generated service provider metadata.
 
 ### Provide the authentication callback
 
@@ -134,6 +138,8 @@ Here is a configuration that has been proven to work with ADFS:
 ```
 
 Please note that ADFS needs to have a trust established to your service in order for this to work.
+
+For more detailed instructions, see [this document from Tim Brody](docs/adfs/README.md).
 
 ## SAML Response Validation - NotBefore and NotOnOrAfter
 
