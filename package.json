@@ -31,6 +31,7 @@
     "url": "https://github.com/jameswomack/passport-saml-restify.git"
   },
   "main": "./lib/passport-saml-restify",
+  "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
     "passport-restify": "1.0.0",
     "q": "1.1.x",
@@ -46,7 +47,7 @@
     "jshint": "*",
     "mocha": "*",
     "request": "*",
-    "restify": "restify/node-restify",
+    "restify": "4.0.3",
     "should": "*",
     "sinon": "^1.10.2"
   },
