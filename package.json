@@ -33,7 +33,7 @@
   "main": "./lib/passport-saml-restify",
   "license": "SEE LICENSE IN LICENSE",
   "dependencies": {
-    "passport-restify": "1.0.0",
+    "passport-restify": "1.0.1",
     "q": "1.1.x",
     "xml2js": "0.4.x",
     "xml-crypto": "0.8.x",
