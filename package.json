@@ -1,6 +1,6 @@
 {
   "name": "passport-saml-restify",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "licenses": [
     {
       "type": "MIT",
@@ -34,11 +34,11 @@
   "dependencies": {
     "passport-restify": "1.0.0",
     "q": "1.1.x",
+    "xml-crypto": "0.8.4",
+    "xml-encryption": "~0.7",
     "xml2js": "0.4.x",
-    "xml-crypto": "0.3.x",
-    "xmldom": "0.1.x",
     "xmlbuilder": "2.5.x",
-    "xml-encryption": "~0.7"
+    "xmldom": "0.1.x"
   },
   "devDependencies": {
     "body-parser": "1.9.x",
