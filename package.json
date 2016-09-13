@@ -33,10 +33,11 @@
   "main": "./lib/passport-saml-restify",
   "dependencies": {
     "passport-restify": "1.0.0",
+    "passport-strategy": "*",
     "q": "1.1.x",
-    "xml-crypto": "0.8.4",
     "xml-encryption": "~0.7",
     "xml2js": "0.4.x",
+    "xml-crypto": "0.8.x",
     "xmlbuilder": "2.5.x",
     "xmldom": "0.1.x"
   },
@@ -48,7 +49,8 @@
     "request": "*",
     "restify": "restify/node-restify",
     "should": "*",
-    "sinon": "^1.10.2"
+    "sinon": "^1.10.2",
+    "passport": "0.3.x"
   },
   "engines": {
     "node": ">= 0.10.0"
